@@ -1,0 +1,11 @@
+.idea/
+*.csv
+*.xml
+logs/
+outputs/
+*.log
+__pycache__/
+inputs/yelp_config.json
+inputs/setup_database.json
+!inputs/yelp_config[DON'T FORGET TO RENAME].json
+!inputs/setup_database[DON'T FORGET TO RENAME].json

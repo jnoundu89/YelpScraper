@@ -1,0 +1,13 @@
+{
+  "Yelp": {
+    "params": {
+      "find_desc": "",
+      "find_loc": ""
+    },
+    "urls": {
+      "base": "https://www.yelp.fr",
+      "search": "/search",
+      "shop": "/biz"
+    }
+  }
+}
