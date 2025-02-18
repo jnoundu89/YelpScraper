@@ -72,7 +72,7 @@ class Yelp(DataProcessing):
                 else:
                     o_logger.error(f"Request failed for {s_url} with status {o_response.status}")
             except Exception as e:
-                o_logger.error(f"Failed to process {s_url}: {e}")
+                o_logger.error(f"Failed to process {s_url}: {e}, {type(e)}")
         return df
 
     async def _parse_data(self, o_response: scrapling.Adaptor) -> DataFrame:

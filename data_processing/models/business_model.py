@@ -19,7 +19,6 @@ class SearchDataMainContent(BaseModel):
     review_count: int = Field(default=0)
     price_range: str = Field(default="")
     categories: list[str] = Field(default=list)
-    # phone: str = Field(default="")
     website: str = Field(default="")
 
 
@@ -76,7 +75,6 @@ class BusinessSearchExtractor:
                 price_range=item['searchResultBusiness'].get('priceRange', "") or "",
                 categories=[cat["title"] for cat in item['searchResultBusiness'].get('categories', []) if
                             isinstance(cat, dict)],
-                # phone=item['searchResultBusiness'].get('phone', "") or "",
                 website=website
             )
             df_main_content = pd.concat([df_main_content, pd.DataFrame([business_data.model_dump()])])
@@ -123,11 +121,7 @@ class BusinessExtractor:
         Extract the data from the website and return it as a Business object
         :return: Business
         """
-        self.json_data = extract_json_data_from_html(self.o_response, "")
-        while not any(key.startswith('Business:') for key in self.json_data.keys()):
-            self.o_logger.warning("No data found, retrying...")
-            self.o_response = await make_request_with_retries(self.o_response.url)
-            self.json_data = extract_json_data_from_html(self.o_response, "")
+        self.json_data = await self._retry_extract_json_data(self.o_response)
         self._extract_business_id()
         self._extract_address()
         self._extract_phone_number()
@@ -143,6 +137,25 @@ class BusinessExtractor:
         except Exception as obj_exception:
             self.o_logger.error(f"Error while extracting data: {obj_exception}")
         return BusinessPageData(**self.dc_data)
+
+    async def _retry_extract_json_data(self, o_response):
+        """
+        Retry extracting JSON data from the response until a valid key is found or a different key name is used.
+        :param o_response: Response object
+        :return: Extracted JSON data
+        """
+        json_data = extract_json_data_from_html(o_response, "")
+        try:
+            while not any(key.startswith('Business:') for key in json_data.keys()):
+                self.o_logger.warning("No data found, retrying...")
+                o_response = await make_request_with_retries(o_response.url)
+                json_data = extract_json_data_from_html(o_response, "")
+        except AttributeError:
+            self.o_logger.warning(f"No business found, retrying with another key name for the data")
+            json_data = extract_json_data_from_html(o_response, "data-apollo-state")
+        except Exception as obj_exception:
+            self.o_logger.error(f"Error while extracting data: {obj_exception}")
+        return json_data
 
     def _extract_business_id(self):
         """

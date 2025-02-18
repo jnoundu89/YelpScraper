@@ -1,85 +1,64 @@
+import asyncio
+import random
+
 import scrapling
 from playwright._impl._errors import TargetClosedError
 from scrapling import StealthyFetcher, PlayWrightFetcher, AsyncFetcher
 
 from utilities.helper import o_logger
 
+FETCHERS = {
+    "StealthyFetcher": (StealthyFetcher, "async_fetch",
+                        {
+                            "timeout": 30000,
+                            "network_idle": True,
+                            "humanize": True
+                        }),
+    "PlayWrightFetcher": (PlayWrightFetcher, "async_fetch",
+                          {
+                              "timeout": 30000,
+                              "stealth": True,
+                              "disable_resources": True,
+                              "real_chrome": True
+                          }),
+    "AsyncFetcher": (AsyncFetcher, "get",
+                     {
+                         "timeout": 30000,
+                         "stealthy_headers": True,
+                         "follow_redirects": True
+                     })
+}
 
-async def make_request_with_retries(s_url: str) -> scrapling.Adaptor | None:
+
+async def make_request_with_retries(s_url: str, max_retries: int = 3) -> scrapling.Adaptor | None:
     """
-    Make a request with StealthyFetcher, AsyncFetcher and PlaywrightFetcher
-    :param s_url: str - URL of the request
+    Attempt a request using multiple fetchers with retries in case of failure.
+    :param s_url: URL to fetch
+    :param max_retries: Number of retries before switching fetchers
     :return: scrapling.Adaptor | None - Response of the request
     """
-    try:
-        o_response = await make_request_with_stealthy_fetcher(s_url)
-    except AttributeError as e:
-        o_logger.warning(f"Getting AttributeError for {s_url}: {e}")
-        o_response = None
-    if o_response is None:
-        o_response = await make_request_with_playwright_fetcher(s_url)
-    if o_response is None:
-        o_response = await make_request_with_async_fetcher(s_url)
-    return o_response
+    for fetcher_name, (fetcher_class, fetch_method, params) in FETCHERS.items():
+        for attempt in range(max_retries):
+            try:
+                o_logger.info(f"Attempt {attempt + 1} using {fetcher_name} for {s_url}")
+                fetcher_instance = fetcher_class()
+                fetch_fn = getattr(fetcher_instance, fetch_method)
 
+                page = await fetch_fn(s_url, **params)
 
-async def make_request_with_stealthy_fetcher(s_url: str) -> scrapling.Adaptor | None:
-    """
-    Make a request with StealthyFetcher
-    :param s_url: str - URL of the request
-    :return: scrapling.Adaptor | None - Response of the request
-    """
-    try:
-        o_logger.info(f"Making request to {s_url} [StealthyFetcher | async mode]")
-        page = await StealthyFetcher().async_fetch(s_url, timeout=30000,
-                                                   # disable_resources=True, disable_ads=True,
-                                                   network_idle=True, humanize=True
-                                                   # , headless=False
-                                                   )
-        if page.status == 200:
-            o_logger.info(f"Request successful ({page.status}) [StealthyFetcher]")
-            return page
-    except TargetClosedError as e:
-        o_logger.error(f"Getting TargetClosedError for {s_url}: {e}")
-        await page.unroute_all(behavior='ignoreErrors')
-    except Exception as e:
-        o_logger.error(f"Error while fetching {s_url} with StealthyFetcher: {e}")
-    return None
+                if page.status == 200:
+                    o_logger.info(f"Request successful ({page.status}) [{fetcher_name}]")
+                    return page
+            except (AttributeError, TargetClosedError) as e:
+                o_logger.warning(f"{fetcher_name} failed on {s_url}: {e}")
+            except Exception as e:
+                o_logger.error(f"Unexpected error with {fetcher_name}: {e}")
 
+            backoff_time = min(2 ** attempt + random.uniform(1, 3), 20)
+            o_logger.info(f"Sleeping for {backoff_time:.2f} seconds before retry...")
+            await asyncio.sleep(backoff_time)
 
-async def make_request_with_playwright_fetcher(s_url: str) -> scrapling.Adaptor | None:
-    """
-    Make a request with PlaywrightFetcher
-    :param s_url: str - URL of the request
-    :return: scrapling.Adaptor | None - Response of the request
-    """
-    try:
-        o_logger.info(f"Making request to {s_url} [PlaywrightFetcher | async mode]")
-        page = await PlayWrightFetcher().async_fetch(s_url, timeout=60000, stealth=True, disable_resources=True,
-                                                     real_chrome=True)
-        if page.status == 200:
-            o_logger.info(f"Request successful ({page.status}) [PlaywrightFetcher]")
-            return page
-    except TargetClosedError as e:
-        o_logger.error(f"Getting TargetClosedError for {s_url}: {e}")
-        await page.unroute_all(behavior='ignoreErrors')
-    except Exception as e:
-        o_logger.error(f"Error while fetching {s_url} with PlaywrightFetcher: {e}")
-    return None
+        o_logger.info(f"{fetcher_name} failed after {max_retries} retries, switching to next fetcher.")
 
-
-async def make_request_with_async_fetcher(s_url: str) -> scrapling.Adaptor | None:
-    """
-    Make a request with AsyncFetcher
-    :param s_url: str - URL of the request
-    :return: scrapling.Adaptor | None - Response of the request
-    """
-    try:
-        o_logger.info(f"Making request to {s_url} [AsyncFetcher | async mode]")
-        page = await AsyncFetcher().get(s_url, timeout=30000, stealthy_headers=True, follow_redirects=True)
-        if page.status == 200:
-            o_logger.info(f"Request successful ({page.status}) [AsyncFetcher]")
-            return page
-    except Exception as e:
-        o_logger.error(f"Error while fetching {s_url} with AsyncFetcher: {e}")
+    o_logger.error(f"All fetchers failed for {s_url}")
     return None
