@@ -10,7 +10,7 @@ from utilities.helper import o_logger
 FETCHERS = {
     "StealthyFetcher": (StealthyFetcher, "async_fetch",
                         {
-                            "timeout": 30000,
+                            "timeout": 60000,
                             "network_idle": True,
                             "humanize": True
                         }),
