@@ -198,7 +198,8 @@ class BusinessExtractor:
         :return: self
         """
         try:
-            self.dc_data['phone'] = self.json_data[f'Business:{self.dc_data["business_id"]}']['phoneNumber']['formatted']
+            self.dc_data['phone'] = \
+                self.json_data[f'Business:{self.dc_data["business_id"]}']['phoneNumber']['formatted']
         except AttributeError as obj_exception:
             self.dc_data['phone'] = ""
         except Exception as obj_exception:
@@ -265,9 +266,15 @@ class BusinessExtractor:
                     hours = f"{start_time_24h} - {end_time_24h}"
                 else:
                     hours = hours.replace("Closed", "Fermé")
-                day_of_week = day_of_week.replace("Mon", "Lundi").replace("Tue", "Mardi").replace("Wed",
-                                                                                                  "Mercredi").replace(
-                    "Thu", "Jeudi").replace("Fri", "Vendredi").replace("Sat", "Samedi").replace("Sun", "Dimanche")
+                day_of_week = (day_of_week
+                               .replace("Mon", "Lundi")
+                               .replace("Tue", "Mardi")
+                               .replace("Wed", "Mercredi")
+                               .replace("Thu", "Jeudi")
+                               .replace("Fri", "Vendredi")
+                               .replace("Sat", "Samedi")
+                               .replace("Sun", "Dimanche")
+                               )
                 list_hours.append([day_of_week, hours])
             self.dc_data['hours'] = list_hours
         except IndexError as obj_exception:
