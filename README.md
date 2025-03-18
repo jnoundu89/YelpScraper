@@ -127,6 +127,35 @@ This project is licensed under the [GNU Affero General Public License v3.0](http
     git pull
 ```
 
+# Directory structure:
+```bash
+└── jnoundu89-yelpscraper/
+    ├── README.md
+    ├── LICENSE
+    ├── main.py
+    ├── requirements.txt
+    ├── scraper.py
+    ├── data_processing/
+    │   ├── data_processing.py
+    │   └── models/
+    │       └── business_model.py
+    ├── database/
+    │   ├── database_engine.py
+    │   ├── generate_orm_tables.py
+    │   └── sql_requests.py
+    ├── inputs/
+    │   ├── setup_database.json
+    │   └── yelp_config.json
+    ├── pages/
+    │   └── yelp.py
+    └── utilities/
+        ├── config_loader.py
+        ├── helper.py
+        ├── logging_util.py
+        └── request_utils.py
+```
+
+
 # Diagram to summarize the steps:
 
 ```mermaid
