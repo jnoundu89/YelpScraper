@@ -5,12 +5,14 @@ import scrapling
 from playwright._impl._errors import TargetClosedError
 from scrapling import StealthyFetcher, PlayWrightFetcher, AsyncFetcher
 
-from utilities.helper import o_logger
+from utilities.logging_utils import LoggerManager
+
+o_logger = LoggerManager.get_logger(__name__)
 
 FETCHERS = {
     "StealthyFetcher": (StealthyFetcher, "async_fetch",
                         {
-                            "timeout": 60000,
+                            "timeout": 30000,
                             "network_idle": True,
                             "humanize": True
                         }),
@@ -30,7 +32,7 @@ FETCHERS = {
 }
 
 
-async def make_request_with_retries(s_url: str, max_retries: int = 3) -> scrapling.Adaptor | None:
+async def make_request_with_retries(s_url: str, max_retries: int = 5) -> scrapling.Adaptor | None:
     """
     Attempt a request using multiple fetchers with retries in case of failure.
     :param s_url: URL to fetch
@@ -44,6 +46,10 @@ async def make_request_with_retries(s_url: str, max_retries: int = 3) -> scrapli
                 fetcher_instance = fetcher_class()
                 fetch_fn = getattr(fetcher_instance, fetch_method)
 
+                first_backoff = random.uniform(1, 5)
+                o_logger.info(f"Sleeping for {first_backoff:.2f} seconds before first attempt...")
+                await asyncio.sleep(first_backoff)
+
                 page = await fetch_fn(s_url, **params)
 
                 if page.status == 200:
@@ -52,13 +58,13 @@ async def make_request_with_retries(s_url: str, max_retries: int = 3) -> scrapli
             except (AttributeError, TargetClosedError) as e:
                 o_logger.warning(f"{fetcher_name} failed on {s_url}: {e}")
             except Exception as e:
-                o_logger.error(f"Unexpected error with {fetcher_name}: {e}")
+                o_logger.warning(f"Unexpected error with {fetcher_name}: {e}")
 
             backoff_time = min(2 ** attempt + random.uniform(1, 3), 20)
             o_logger.info(f"Sleeping for {backoff_time:.2f} seconds before retry...")
             await asyncio.sleep(backoff_time)
 
-        o_logger.info(f"{fetcher_name} failed after {max_retries} retries, switching to next fetcher.")
+        o_logger.warning(f"{fetcher_name} failed after {max_retries} retries, switching to next fetcher.")
 
     o_logger.error(f"All fetchers failed for {s_url}")
     return None

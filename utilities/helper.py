@@ -4,22 +4,12 @@ import logging
 import os
 import traceback
 from datetime import date
-from enum import Enum
 
 from scrapling.engines.toolbelt import Response
 
 from utilities.config_loader import ConfigLoader
 
 o_logger = logging.getLogger(__name__)
-
-
-class Color(Enum):
-    """
-    Color class to define colors for the logger messages
-    """
-    SUCCESS = '#556b2f'
-    ERROR = '#ff0000'
-    WARNING = '#ff9800'
 
 
 def parse_arguments():

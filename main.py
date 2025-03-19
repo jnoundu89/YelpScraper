@@ -1,13 +1,16 @@
 import asyncio
-import logging
 import os
 
 from scraper import MainScraper
 from utilities.config_loader import ConfigLoader
-from utilities.logging_util import configure_logging
 from utilities.helper import parse_arguments
+from utilities.logging_utils import LoggerManager
 
-o_logger = logging.getLogger(__name__)
+# Initialize the logger
+s_script_name = os.path.basename(os.path.dirname(__file__))
+LoggerManager(log_level='INFO', process_name=s_script_name)
+
+o_logger = LoggerManager.get_logger(__name__)  # Factory Method for getting the logger
 
 
 async def main() -> None:
@@ -15,8 +18,6 @@ async def main() -> None:
     Main function to execute the script and log the start and end of the script execution
     :return: None
     """
-    s_script_name = os.path.basename(os.path.dirname(__file__))
-    configure_logging('INFO', s_script_name)
     o_logger.info(f'Script `{s_script_name}` started.')
     str_path = os.path.abspath(__file__)
     obj_config_loader = ConfigLoader(str_path, 'inputs/yelp_config.json')
