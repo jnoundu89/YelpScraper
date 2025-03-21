@@ -24,7 +24,7 @@ def parse_arguments():
     return obj_parser
 
 
-def extract_json_data_from_html(response: Response, s_css_class: str) -> dict | None:
+async def extract_json_data_from_html(response: Response, s_css_class: str) -> dict | None:
     """
     Extract JSON data from the HTML
     :param response: Response

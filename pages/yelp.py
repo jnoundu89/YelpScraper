@@ -1,4 +1,5 @@
 import logging
+import sys
 from argparse import ArgumentParser
 from dataclasses import dataclass
 
@@ -6,7 +7,7 @@ import pandas as pd
 import scrapling
 from pandas import DataFrame
 from sqlalchemy.exc import ProgrammingError
-from tqdm import tqdm
+from tqdm.asyncio import tqdm
 
 from data_processing.data_processing import DataProcessing
 from data_processing.models.business_model import BusinessExtractor, BusinessSearchExtractor
@@ -51,7 +52,7 @@ class Yelp(DataProcessing):
         else:
             l_links = df_search_page['url'].to_list()
 
-        for s_url in tqdm(l_links):
+        for s_url in tqdm(l_links, file=sys.stdout):
             o_logger.info(f"link number {l_links.index(s_url)}/{len(l_links)}")
             try:
                 o_response = await make_request_with_retries(s_url)
@@ -106,14 +107,15 @@ class Yelp(DataProcessing):
             o_page_response = await make_request_with_retries(url)
             str_button_next_page = o_page_response.find_by_text("Next Page").parent.html_content
             if o_page_response.status == 200:
-                json_data = extract_json_data_from_html(o_page_response, "data-hypernova-key=")
+                json_data = await extract_json_data_from_html(o_page_response, "data-hypernova-key=")
                 json_data_path = json_data['legacyProps']['searchAppProps']['searchPageProps']
                 json_main_content_path = json_data_path['mainContentComponentsListProps']
-                json_map_state_path = json_data_path['rightRailProps']['searchMapProps']['mapState']['markers']
                 df_main_content = business_search.extract_data_from_main_content(json_main_content_path)
-                df_map_state = business_search.extract_data_from_map_state(json_map_state_path)
-                df_page = pd.merge(df_main_content, df_map_state, on='business_id', how='inner')
-                df = pd.concat([df, df_page], ignore_index=True)
+                # json_map_state_path = json_data_path['rightRailProps']['searchMapProps']['mapState']['markers']
+                # df_map_state = business_search.extract_data_from_map_state(json_map_state_path)
+                # df_page = pd.merge(df_main_content, df_map_state, on='business_id', how='inner')
+                # df = pd.concat([df, df_page], ignore_index=True)
+                df = pd.concat([df, df_main_content], ignore_index=True)
             else:
                 o_logger.error(f"Error while retrieving the page: {o_page_response.url} {o_page_response.status}")
             if 'disabled' in str_button_next_page:
@@ -132,7 +134,7 @@ def post_processing_data(df: DataFrame, dc_params: dict[str]) -> DataFrame:
     try:
         df['date_insertion'] = get_today_date()
         df['date_insertion'] = pd.to_datetime(df['date_insertion'], format='%d_%m_%Y').dt.date
-        df['website'] = df['website'].apply(lambda x: x.replace("http://", "")\
+        df['website'] = df['website'].apply(lambda x: x.replace("http://", "") \
                                             .replace("https://", "").strip() if isinstance(x, str) else x)
         df['description'] = df['description'].apply(
             lambda x: x.replace("Specialties: ", "").strip() if isinstance(x, str) else x)
@@ -146,10 +148,10 @@ def post_processing_data(df: DataFrame, dc_params: dict[str]) -> DataFrame:
         for s_key, s_value in df.items():
             if s_value.dtype == 'object':
                 df[s_key] = df[s_key].apply(
-                    lambda x: x\
-                        .replace("amp;", "")\
-                        .replace("&#x27;", "'")\
-                        .replace(" ", "")\
+                    lambda x: x \
+                        .replace("amp;", "") \
+                        .replace("&#x27;", "'") \
+                        .replace(" ", "") \
                         .strip() if isinstance(x, str) else x)
     except Exception as e:
         o_logger.error(f"Failed to post-process data: {e}")
