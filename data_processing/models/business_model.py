@@ -22,15 +22,6 @@ class SearchDataMainContent(BaseModel):
     website: str = Field(default="")
 
 
-# class SearchDataMapState(BaseModel):
-#     """
-#     BusinessSearchData class to store the data of a business from Yelp website in a structured way using Pydantic
-#     """
-#     business_id: str = Field(default="")
-#     latitude: float = Field(default=0.0)
-#     longitude: float = Field(default=0.0)
-
-
 class BusinessPageData(BaseModel):
     """
     Restaurant class to store the data of a restaurant from Yelp website in a structured way using Pydantic
@@ -82,24 +73,6 @@ class BusinessSearchExtractor:
             df_main_content = pd.concat([df_main_content, pd.DataFrame([business_data.model_dump()])])
         return df_main_content
 
-    # @staticmethod
-    # def extract_data_from_map_state(json_map_state: dict) -> DataFrame:
-    #     """
-    #     Extract data from the map state of the JSON data
-    #     :param json_map_state: dict
-    #     :return: DataFrame
-    #     """
-    #     df_map_state = pd.DataFrame()
-    #     json_map_state = [item for item in json_map_state if 'resourceId' in item]
-    #     for item in json_map_state:
-    #         business_data = SearchDataMapState(
-    #             business_id=item['resourceId'],
-    #             latitude=item['location']['latitude'],
-    #             longitude=item['location']['longitude']
-    #         )
-    #         df_map_state = pd.concat([df_map_state, pd.DataFrame([business_data.model_dump()])])
-    #     return df_map_state
-
 
 class BusinessExtractor:
     """
@@ -111,8 +84,6 @@ class BusinessExtractor:
         """
         Initialize the BusinessExtractor class
         :param o_response: scrapling.Adaptor - Response of the request
-        :param o_logger: Logger - Logger to log the data extraction
-        :param dc_data: dict - Dictionary to store the extracted data
         """
         self.o_response = o_response
         self.o_logger = o_logger
@@ -123,9 +94,9 @@ class BusinessExtractor:
         Extract the data from the website and return it as a Business object
         :return: Business
         """
+        self._extract_location()
         self.json_data = await self._retry_extract_json_data(self.o_response)
         self._extract_business_id()
-        await self._extract_location()
         self._extract_address()
         self._extract_phone_number()
         self._extract_description()
@@ -141,24 +112,26 @@ class BusinessExtractor:
             self.o_logger.error(f"Error while extracting data: {obj_exception}")
         return BusinessPageData(**self.dc_data)
 
-    async def _retry_extract_json_data(self, o_response):
+    async def _retry_extract_json_data(self, o_response) -> dict[str, dict]:
         """
-        Retry extracting JSON data from the response until a valid key is found or a different key name is used.
-        :param o_response: Response object
-        :return: Extracted JSON data
+        Retry extracting JSON data from the response up to 3 times with different CSS classes.
+        :param o_response: Response object from the request
+        :return: Extracted JSON data as a dictionary
         """
-        json_data = await extract_json_data_from_html(o_response, "")
-        try:
-            while not any(key.startswith('Business:') for key in json_data.keys()):
-                self.o_logger.warning("No data found, retrying...")
-                o_response = await make_request_with_retries(o_response.url)
-                json_data = await extract_json_data_from_html(o_response, "")
-        except AttributeError:
-            self.o_logger.warning(f"No business found, retrying with another key name for the data")
-            json_data = await extract_json_data_from_html(o_response, "data-apollo-state")
-        except Exception as obj_exception:
-            self.o_logger.error(f"Error while extracting data: {obj_exception}")
-        return json_data
+        json_data = {}
+        css_classes = ["data-apollo-state", ""]
+        for attempt in range(3):  # Retry up to 3 times
+            for s_css_class in css_classes:
+                json_data = extract_json_data_from_html(o_response, s_css_class) or {}
+                try:
+                    if isinstance(json_data, dict) and any(key.startswith('Business:') for key in json_data.keys()):
+                        return json_data  # ✅ Success, return data
+                    self.o_logger.warning(
+                        f"Attempt {attempt + 1}: No data found with CSS class '{s_css_class}', retrying with '{css_classes[attempt + 1]}' ...")
+                except Exception as obj_exception:
+                    self.o_logger.error(f"Error while extracting data with CSS class '{s_css_class}': {obj_exception}")
+            o_response = await make_request_with_retries(o_response.url)  # Retry fetching the response
+        return json_data  # Return the last extracted data, even if empty
 
     def _extract_business_id(self):
         """
@@ -290,7 +263,7 @@ class BusinessExtractor:
             o_logger.error(f"Error while extracting hours: {obj_exception}")
         return self
 
-    async def _extract_location(self):
+    def _extract_location(self):
         """
         Extract the location of the restaurant
         :return: self
@@ -300,7 +273,8 @@ class BusinessExtractor:
             for image in images:
                 if "maps.googleapis.com" in image.attrib["src"]:
                     self.dc_data['latitude'] = float(image.attrib["src"].split("center=")[1].split("%2C")[0])
-                    self.dc_data['longitude'] = float(image.attrib["src"].split("center=")[1].split("%2C")[1].split("&")[0])
+                    self.dc_data['longitude'] = float(
+                        image.attrib["src"].split("center=")[1].split("%2C")[1].split("&")[0])
         except AttributeError as obj_exception:
             o_logger.warning(f"No location found, {obj_exception}")
             self.dc_data['latitude'] = 0.0

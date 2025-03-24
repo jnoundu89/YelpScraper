@@ -39,6 +39,7 @@ class Yelp(DataProcessing):
         s_base_url = dc_path["urls"]["base"]
         s_search_url = dc_path["urls"]["search"]
         dc_params = dc_path["params"]
+        l_links_failed_to_process = []
 
         s_url = f"{s_base_url}{s_search_url}"
         df_search_page = await self._retrieve_elements_from_search_page(s_url, dc_params)
@@ -72,8 +73,11 @@ class Yelp(DataProcessing):
                             o_logger.error(f"Failed to insert data into the database: {e}")
                 else:
                     o_logger.error(f"Request failed for {s_url} with status {o_response.status}")
+                    l_links_failed_to_process.append(s_url)
             except Exception as e:
                 o_logger.error(f"Failed to process {s_url}: {e}, {type(e)}")
+                l_links_failed_to_process.append(s_url)
+        o_logger.warning(f"Links failed to process: {l_links_failed_to_process}")
         return df
 
     async def _parse_data(self, o_response: scrapling.Adaptor) -> DataFrame:
@@ -107,14 +111,10 @@ class Yelp(DataProcessing):
             o_page_response = await make_request_with_retries(url)
             str_button_next_page = o_page_response.find_by_text("Next Page").parent.html_content
             if o_page_response.status == 200:
-                json_data = await extract_json_data_from_html(o_page_response, "data-hypernova-key=")
+                json_data = extract_json_data_from_html(o_page_response, "data-hypernova-key=")
                 json_data_path = json_data['legacyProps']['searchAppProps']['searchPageProps']
                 json_main_content_path = json_data_path['mainContentComponentsListProps']
                 df_main_content = business_search.extract_data_from_main_content(json_main_content_path)
-                # json_map_state_path = json_data_path['rightRailProps']['searchMapProps']['mapState']['markers']
-                # df_map_state = business_search.extract_data_from_map_state(json_map_state_path)
-                # df_page = pd.merge(df_main_content, df_map_state, on='business_id', how='inner')
-                # df = pd.concat([df, df_page], ignore_index=True)
                 df = pd.concat([df, df_main_content], ignore_index=True)
             else:
                 o_logger.error(f"Error while retrieving the page: {o_page_response.url} {o_page_response.status}")
